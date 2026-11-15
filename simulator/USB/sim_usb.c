@@ -8,6 +8,7 @@
  */
 #include "sim_usb.h"
 
+#include "../testing/sim_test_wallet.h"
 #include "sim_transport.h"
 #include "usb_api_priv.h" /* comm_packet_parser() */
 
@@ -26,6 +27,8 @@ static void on_frame_from_host(const uint8_t *frame, size_t len) {
 }
 
 void SIM_USB_DEVICE_Init() {
+  /* Optional SDK test fixture; no-op unless CYPHEROCK_SIM_TEST_MNEMONIC is set */
+  sim_test_wallet_load();
   sim_transport_init(on_frame_from_host);
 }
 

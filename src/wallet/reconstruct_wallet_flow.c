@@ -75,6 +75,11 @@
 #include "wallet_list.h"
 #include "wallet_utilities.h"
 
+#if USE_SIMULATOR == 1
+#include <stdlib.h>
+#include <string.h>
+#endif
+
 /*****************************************************************************
  * EXTERN VARIABLES
  *****************************************************************************/
@@ -414,6 +419,23 @@ bool reconstruct_seed(const uint8_t *wallet_id,
   if ((NULL == wallet_id) || (NULL == seed_out)) {
     return false;
   }
+
+#if USE_SIMULATOR == 1
+  /* SIMULATOR ONLY, testing aid: the simulator's emulated X1 card does not
+   * speak the encrypted card protocol, so a wallet's seed cannot be rebuilt
+   * from card shares. When CYPHEROCK_SIM_TEST_MNEMONIC is set and matches the
+   * requested wallet id, derive the seed from that published test mnemonic
+   * instead. Never compiled into device builds (USE_SIMULATOR=0). */
+  const char *test_mnemonic = getenv("CYPHEROCK_SIM_TEST_MNEMONIC");
+  if (NULL != test_mnemonic) {
+    uint8_t test_wallet_id[WALLET_ID_SIZE] = {0};
+    calculate_wallet_id(test_wallet_id, test_mnemonic);
+    if (0 == memcmp(test_wallet_id, wallet_id, WALLET_ID_SIZE)) {
+      mnemonic_to_seed(test_mnemonic, "", seed_out, NULL);
+      return true;
+    }
+  }
+#endif
 
   uint8_t result = false;
 
