@@ -188,6 +188,12 @@ target_link_libraries(${EXECUTABLE} PRIVATE ${SDL2_LIBRARIES} -lm)
 if(WIN32)
     target_link_libraries(${EXECUTABLE} PRIVATE ws2_32)
 endif()
+# Stack protector everywhere (Ubuntu's gcc enables it by default; MinGW does
+# not), so stack overflows in simulator code abort on every host, not only Linux.
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND NOT UNIT_TESTS_SWITCH)
+    target_compile_options(${EXECUTABLE} PRIVATE -fstack-protector-strong)
+    target_link_options(${EXECUTABLE} PRIVATE -fstack-protector-strong)
+endif()
 # Host compilers newer than the device toolchain (arm-none-eabi-gcc 10.3):
 # GCC 14+ turns some long-standing warnings into errors and GCC 15+ defaults
 # to C23. Build the simulator with the device's C dialect and keep those
