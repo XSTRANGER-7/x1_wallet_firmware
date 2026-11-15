@@ -629,7 +629,9 @@ static void sim_hal_init(void) {
   /* Tick init.
    * You have to call 'lv_tick_inc()' in periodically to inform LittelvGL about
    * how much time were elapsed Create an SDL thread to do this*/
+#ifndef __EMSCRIPTEN__
   SDL_CreateThread(tick_thread, "tick", NULL);
+#endif /* WebAssembly has no threads: BSP_DelayMs() advances the tick */
 
   /* Optional:
    * Create a memory monitor task which prints the memory usage in

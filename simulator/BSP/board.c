@@ -9,6 +9,15 @@
 #include "sim_usb.h"
 #include "stdlib.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+#include "keyboard.h"
+#include "mouse.h"
+/* Public only in Emscripten builds (simulator/lv_drivers/display/monitor.c) */
+void monitor_sdl_refr_core(void);
+#endif
+
 uint32_t buzzer_counter = 0;
 uint8_t STM32_UID[12] = {0};
 
@@ -182,6 +191,30 @@ BSP_Status_t BSP_NonVolatileWrite(uint32_t addr,
 void BSP_reset(void) {
 }
 
+#ifdef __EMSCRIPTEN__
+/* WebAssembly build: no threads, so the jobs of the SDL refresh thread
+ * (monitor.c) and the LVGL tick thread (application_startup.c) run here, in
+ * the firmware's own wait loop. emscripten_sleep() hands control back to the
+ * browser (Asyncify), so the page stays responsive while the firmware waits. */
+static void wasm_pump(void) {
+  static uint32_t last_tick = 0;
+  uint32_t now = SDL_GetTicks();
+  if (last_tick == 0)
+    last_tick = now;
+  if (now > last_tick) {
+    lv_tick_inc(now - last_tick);
+    last_tick = now;
+  }
+
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    mouse_handler(&event);
+    keyboard_handler(&event);
+  }
+  monitor_sdl_refr_core();
+}
+#endif
+
 void BSP_DelayMs(uint32_t delayValue) {
   /* Poll the USB bridge while waiting, in 5 ms slices, the way the USB
    * interrupt fires during delays on real hardware. get_events() calls this
@@ -190,7 +223,12 @@ void BSP_DelayMs(uint32_t delayValue) {
   do {
     uint32_t step = delayValue > 5 ? 5 : delayValue;
     usbsim_continue_loop();
+#ifdef __EMSCRIPTEN__
+    wasm_pump();
+    emscripten_sleep(step);
+#else
     SDL_Delay(step);
+#endif
     delayValue -= step;
   } while (delayValue > 0);
 }

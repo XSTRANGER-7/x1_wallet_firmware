@@ -18,8 +18,14 @@ ENDIF(DEV_SWITCH)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(EXECUTABLE ${PROJECT_NAME})
-find_package(SDL2 REQUIRED SDL2)
-include_directories(${SDL2_INCLUDE_DIRS})
+if(EMSCRIPTEN)
+    # WebAssembly build (emcmake cmake ...): Emscripten's own SDL2 port.
+    add_compile_options(-sUSE_SDL=2)
+    set(CMAKE_EXECUTABLE_SUFFIX ".js")
+else()
+    find_package(SDL2 REQUIRED SDL2)
+    include_directories(${SDL2_INCLUDE_DIRS})
+endif()
 
 add_executable(${EXECUTABLE} ${SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/version.c ${MINI_GMP_SRCS} ${POSEIDON_SRCS} ${PROTO_SRCS} ${PROTO_HDRS} ${INCLUDES})
 
@@ -183,9 +189,37 @@ IF(UNIT_TESTS_SWITCH)
         target_compile_options(${EXECUTABLE} PRIVATE --coverage -g -O0)
         target_link_libraries(${EXECUTABLE} PRIVATE -lgcov )
 ENDIF(UNIT_TESTS_SWITCH)
-target_link_libraries(${EXECUTABLE} PRIVATE ${SDL2_LIBRARIES} -lm)
+if(EMSCRIPTEN)
+    # The firmware's main loop never returns; Asyncify lets emscripten_sleep()
+    # in BSP_DelayMs() yield to the browser. The page loads it with
+    # createX1Simulator({ canvas, x1OnFrame, ... }) and talks to it through
+    # sim_wasm_host_write() (simulator/transport/sim_socket_wasm.c).
+    target_compile_options(${EXECUTABLE} PRIVATE
+        -Wno-error=implicit-function-declaration
+        -Wno-error=int-conversion
+        -Wno-error=incompatible-pointer-types
+        -Wno-error=incompatible-function-pointer-types
+        -Wno-error=return-type)
+    target_link_options(${EXECUTABLE} PRIVATE
+        -sUSE_SDL=2
+        -sASYNCIFY
+        -sASYNCIFY_STACK_SIZE=65536
+        -sSTACK_SIZE=1048576
+        -sALLOW_MEMORY_GROWTH
+        -sINITIAL_MEMORY=67108864
+        -sMODULARIZE
+        -sEXPORT_ES6
+        -sEXPORT_NAME=createX1Simulator
+        -sENVIRONMENT=web
+        -sEXIT_RUNTIME=0
+        "-sEXPORTED_FUNCTIONS=_main,_malloc,_free,_sim_wasm_host_write,_sim_wasm_host_connect"
+        "-sEXPORTED_RUNTIME_METHODS=ENV,HEAPU8")
+    target_link_libraries(${EXECUTABLE} PRIVATE -lm)
+else()
+    target_link_libraries(${EXECUTABLE} PRIVATE ${SDL2_LIBRARIES} -lm)
+endif()
 # simulator/transport/sim_socket.c uses Winsock on Windows
-if(WIN32)
+if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${EXECUTABLE} PRIVATE ws2_32)
 endif()
 # Stack protector everywhere (Ubuntu's gcc enables it by default; MinGW does

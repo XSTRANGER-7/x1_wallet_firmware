@@ -63,6 +63,8 @@
 #include <bignum.h>
 #include <../apps/starknet_app/starknet_context.h>
 
+#include "memzero.h"
+#include "rand.h"
 #include "mini-gmp-helpers.h"
 #include <stdbool.h>
 

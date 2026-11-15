@@ -374,8 +374,10 @@ static void monitor_sdl_refr_core(void)
   }
 #endif /*MONITOR_APPLE*/
 
+#ifndef MONITOR_EMSCRIPTEN
   /*Sleep some time*/
   SDL_Delay(SDL_REFR_PERIOD);
+#endif /* Emscripten: called from BSP_DelayMs(), which already sleeps */
 }
 
 static void window_create(monitor_t *m) {

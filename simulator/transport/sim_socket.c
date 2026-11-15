@@ -8,7 +8,9 @@
  * thread. Binds to 127.0.0.1 only.
  *
  * Builds with POSIX sockets (Linux, macOS) and Winsock (Windows / MinGW).
+ * WebAssembly builds use sim_socket_wasm.c instead (same API).
  */
+#ifndef __EMSCRIPTEN__
 #include "sim_socket.h"
 
 #include <errno.h>
@@ -273,3 +275,5 @@ void sim_socket_deinit(void) {
   close_listener();
   bound_port = 0;
 }
+
+#endif /* __EMSCRIPTEN__ */
