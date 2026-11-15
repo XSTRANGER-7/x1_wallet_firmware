@@ -183,7 +183,16 @@ void BSP_reset(void) {
 }
 
 void BSP_DelayMs(uint32_t delayValue) {
-  SDL_Delay(delayValue);
+  /* Poll the USB bridge while waiting, in 5 ms slices, the way the USB
+   * interrupt fires during delays on real hardware. get_events() calls this
+   * once per pass (common/core/events.c), so host packets are always served
+   * while the firmware waits for input. */
+  do {
+    uint32_t step = delayValue > 5 ? 5 : delayValue;
+    usbsim_continue_loop();
+    SDL_Delay(step);
+    delayValue -= step;
+  } while (delayValue > 0);
 }
 
 void BSP_Buzzer_Timer() {

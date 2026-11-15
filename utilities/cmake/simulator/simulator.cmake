@@ -150,6 +150,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         simulator/lv_drivers/indev
         simulator/porting
         simulator/USB
+        simulator/transport
 
         #unit test framework
         $<$<BOOL:UNIT_TESTS_SWITCH>:${PROJECT_SOURCE_DIR}/tests/framework/unity>
@@ -183,5 +184,21 @@ IF(UNIT_TESTS_SWITCH)
         target_link_libraries(${EXECUTABLE} PRIVATE -lgcov )
 ENDIF(UNIT_TESTS_SWITCH)
 target_link_libraries(${EXECUTABLE} PRIVATE ${SDL2_LIBRARIES} -lm)
+# simulator/transport/sim_socket.c uses Winsock on Windows
+if(WIN32)
+    target_link_libraries(${EXECUTABLE} PRIVATE ws2_32)
+endif()
+# Host compilers newer than the device toolchain (arm-none-eabi-gcc 10.3):
+# GCC 14+ turns some long-standing warnings into errors and GCC 15+ defaults
+# to C23. Build the simulator with the device's C dialect and keep those
+# checks as warnings, so existing firmware code compiles unchanged.
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+    target_compile_options(${EXECUTABLE} PRIVATE
+        -std=gnu17
+        -Wno-error=incompatible-pointer-types
+        -Wno-error=return-mismatch
+        -Wno-error=implicit-function-declaration
+        -Wno-error=int-conversion)
+endif()
 target_link_options(${EXECUTABLE} PRIVATE ${inherited})
 add_custom_target (run COMMAND ${EXECUTABLE_OUTPUT_PATH}/${EXECUTABLE})
