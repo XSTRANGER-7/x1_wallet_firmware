@@ -413,6 +413,25 @@ bool reconstruct_seed_without_passphrase(const uint8_t *wallet_id,
 #endif
 }
 
+#if USE_SIMULATOR == 1
+/* SIMULATOR ONLY, testing aid: the simulator's emulated X1 card does not
+ * speak the encrypted card protocol, so a wallet's mnemonic cannot be rebuilt
+ * from card shares. When CYPHEROCK_SIM_TEST_MNEMONIC is set and its wallet id
+ * matches the requested one, return that published test mnemonic instead.
+ * Never compiled into device builds (USE_SIMULATOR=0). */
+static const char *sim_test_mnemonic_for(const uint8_t *wallet_id) {
+  const char *test_mnemonic = getenv("CYPHEROCK_SIM_TEST_MNEMONIC");
+  if (NULL == test_mnemonic || '\0' == test_mnemonic[0]) {
+    return NULL;
+  }
+  uint8_t test_wallet_id[WALLET_ID_SIZE] = {0};
+  calculate_wallet_id(test_wallet_id, test_mnemonic);
+  return (0 == memcmp(test_wallet_id, wallet_id, WALLET_ID_SIZE))
+             ? test_mnemonic
+             : NULL;
+}
+#endif
+
 bool reconstruct_seed(const uint8_t *wallet_id,
                       uint8_t *seed_out,
                       rejection_cb *reject_cb) {
@@ -421,19 +440,10 @@ bool reconstruct_seed(const uint8_t *wallet_id,
   }
 
 #if USE_SIMULATOR == 1
-  /* SIMULATOR ONLY, testing aid: the simulator's emulated X1 card does not
-   * speak the encrypted card protocol, so a wallet's seed cannot be rebuilt
-   * from card shares. When CYPHEROCK_SIM_TEST_MNEMONIC is set and matches the
-   * requested wallet id, derive the seed from that published test mnemonic
-   * instead. Never compiled into device builds (USE_SIMULATOR=0). */
-  const char *test_mnemonic = getenv("CYPHEROCK_SIM_TEST_MNEMONIC");
+  const char *test_mnemonic = sim_test_mnemonic_for(wallet_id);
   if (NULL != test_mnemonic) {
-    uint8_t test_wallet_id[WALLET_ID_SIZE] = {0};
-    calculate_wallet_id(test_wallet_id, test_mnemonic);
-    if (0 == memcmp(test_wallet_id, wallet_id, WALLET_ID_SIZE)) {
-      mnemonic_to_seed(test_mnemonic, "", seed_out, NULL);
-      return true;
-    }
+    mnemonic_to_seed(test_mnemonic, "", seed_out, NULL);
+    return true;
   }
 #endif
 
@@ -494,8 +504,15 @@ bool reconstruct_sia_seed(const uint8_t *wallet_id,
   clear_wallet_data();
   mnemonic_clear();
 
+#if USE_SIMULATOR == 1
+  const char *mnemonic = sim_test_mnemonic_for(wallet_id);
+  if (NULL == mnemonic) {
+    mnemonic = reconstruct_wallet(wallet_id, PASSPHRASE_INPUT, reject_cb);
+  }
+#else
   const char *mnemonic =
       reconstruct_wallet(wallet_id, PASSPHRASE_INPUT, reject_cb);
+#endif
 
   if (mnemonic == NULL || !mnemonic_check(mnemonic)) {
     mnemonic_clear();
